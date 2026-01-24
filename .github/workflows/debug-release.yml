@@ -59,10 +59,20 @@ jobs:
           echo "Files prepared:"
           ls -l release_assets/
 
+      - name: Build Changelog
+        id: build_changelog
+        uses: mikepenz/release-changelog-builder-action@v5
+        with:
+          configuration: ".github/changelog_config.json"
+          toTag: ${{ inputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create Test Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.version }}
+          body: ${{ steps.build_changelog.outputs.changelog }}
           files: release_assets/*
           draft: true
           prerelease: true
