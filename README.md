@@ -53,19 +53,13 @@ An offline-first streaming music app that connects to your home server.
 
 ---
 
-## ⬇️ Download and install
+## 📀 Download
 
-### Android
-Download the latest release from the [releases](https://github.com/ProjectDistribute/Distribute/releases) page.
-
-### Windows
+### Windows, Linux, macOS & Android
 Download the latest release from the [releases](https://github.com/ProjectDistribute/Distribute/releases) page.
 
 ### iOS
-Download from the [App Store](https://apps.apple.com/app/)
-
-### macOS
-Download from the [App Store](https://apps.apple.com/app/) or the [releases](https://github.com/ProjectDistribute/Distribute/releases) page.
+Download from [TestFlight](https://testflight.apple.com/join/DA8bhKJH)
 
 ---
 
