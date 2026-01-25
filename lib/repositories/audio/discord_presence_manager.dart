@@ -19,8 +19,12 @@ class DiscordPresenceManager {
   }
 
   void _updatePresence(ControllerState state) async {
-    if (!settingsRepository.discordRPCEnabled ||
-        !FlutterDiscordRPC.instance.isConnected) {
+    try {
+      if (!settingsRepository.discordRPCEnabled ||
+          !FlutterDiscordRPC.instance.isConnected) {
+        return;
+      }
+    } catch (_) {
       return;
     }
 

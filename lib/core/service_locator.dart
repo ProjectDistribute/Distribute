@@ -7,6 +7,7 @@ import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:variable_blur/variable_blur.dart';
+import 'package:flutter_discord_rpc/flutter_discord_rpc.dart';
 
 import 'package:distributeapp/api/auth_api.dart';
 import 'package:distributeapp/api/requests_api.dart';
@@ -40,7 +41,7 @@ Future<void> initDependencies() async {
     getApplicationDocumentsDirectory(),
     SharedPreferences.getInstance(),
     VariableBlur.precacheShaders(),
-    // FlutterDiscordRPC.initialize("1439666298807255184"),
+    FlutterDiscordRPC.initialize("1439666298807255184"),
   ]);
 
   final appDocDir = results[0] as Directory;

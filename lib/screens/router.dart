@@ -453,8 +453,10 @@ class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar> {
 
   @override
   void dispose() {
-    FlutterDiscordRPC.instance.disconnect();
-    FlutterDiscordRPC.instance.dispose();
+    try {
+      FlutterDiscordRPC.instance.disconnect();
+      FlutterDiscordRPC.instance.dispose();
+    } catch (_) {}
     super.dispose();
   }
 
