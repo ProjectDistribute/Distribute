@@ -192,11 +192,7 @@ jobs:
 
     - name: Create DMG
       run: |
-        if ! command -v create-dmg &> /dev/null; then
-          echo "Downloading create-dmg..."
-          curl -sL https://raw.githubusercontent.com/create-dmg/create-dmg/master/create-dmg -o /usr/local/bin/create-dmg
-          chmod +x /usr/local/bin/create-dmg
-        fi
+        brew install create-dmg
         
         mkdir -p dist
         APP_PATH="build/macos/Build/Products/Release/Distribute.app"
