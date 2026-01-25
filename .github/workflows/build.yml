@@ -262,7 +262,7 @@ jobs:
         
         chmod +x linuxdeploy*.AppImage
         
-        cp assets/icon/icon-rounded.png distribute.png
+        cp assets/icon/icon-rounded-512.png distribute.png
         
         ./linuxdeploy-x86_64.AppImage \
           --appdir AppDir \
