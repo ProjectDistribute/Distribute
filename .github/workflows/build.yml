@@ -230,7 +230,7 @@ jobs:
 
   linux:
     needs: codegen
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
     - name: Download Source
       uses: actions/download-artifact@v4
