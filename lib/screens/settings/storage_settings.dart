@@ -292,9 +292,8 @@ class _StorageSettingsViewState extends State<_StorageSettingsView> {
                 onTap: isTransferring
                     ? null
                     : () async {
-                        final String? selectedDirectory = await FilePicker
-                            .platform
-                            .getDirectoryPath();
+                        final String? selectedDirectory =
+                            await FilePicker.getDirectoryPath();
                         if (selectedDirectory != null && context.mounted) {
                           context.read<StorageCubit>().requestMove(
                             selectedDirectory,
