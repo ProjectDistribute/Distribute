@@ -44,9 +44,18 @@ class _VinylWidgetState extends State<VinylWidget>
   @override
   void initState() {
     super.initState();
-    _ticker = createTicker(_onTick)..start();
+    _ticker = createTicker(_onTick);
     if (widget.isPlaying) {
       _velocity = _targetSpeed;
+      _startTicker();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant VinylWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isPlaying && !_ticker.isActive) {
+      _startTicker();
     }
   }
 
@@ -77,6 +86,21 @@ class _VinylWidgetState extends State<VinylWidget>
     if (_velocity > 0) {
       double newRotation = _rotationNotifier.value + (_velocity * dt);
       _rotationNotifier.value = newRotation % 1.0;
+    } else {
+      _stopTickerIfIdle();
+    }
+  }
+
+  void _startTicker() {
+    if (_ticker.isActive) return;
+    _lastElapsed = Duration.zero;
+    _ticker.start();
+  }
+
+  void _stopTickerIfIdle() {
+    if (_ticker.isActive && !widget.isPlaying && _velocity <= 0) {
+      _ticker.stop();
+      _lastElapsed = Duration.zero;
     }
   }
 
