@@ -31,7 +31,7 @@ class BlurryAppBar extends StatelessWidget implements PreferredSizeWidget {
       effectiveLeading = HoverableIconButton(
         icon: Icon(AppIcons.arrowBack),
         onPressed: () => context.pop(),
-        color: Theme.of(context).colorScheme.secondary,
+        color: Theme.of(context).colorScheme.onSurface,
       );
     }
 
