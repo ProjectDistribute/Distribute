@@ -304,20 +304,48 @@ class _MusicPlayerState extends State<MusicPlayer>
               MediaQuery.of(context).padding.bottom + 90,
             );
 
+            void handleDragUpdate(DragUpdateDetails details) {
+              final double delta =
+                  details.primaryDelta! / (maxPlayerHeight - _miniHeight);
+              if (_miniHeight + (details.primaryDelta ?? 0) > maxPlayerHeight) {
+                return;
+              }
+              _expandController.value -= delta;
+            }
+
+            void handleDragEnd(DragEndDetails details) {
+              const double velocityThreshold = 300.0;
+              final double velocity = details.primaryVelocity!;
+
+              if (velocity < -velocityThreshold) {
+                _expandController.forward();
+              } else if (velocity > velocityThreshold) {
+                _expandController.reverse();
+              } else if (_expandController.value > 0.5) {
+                _expandController.forward();
+              } else {
+                _expandController.reverse();
+              }
+            }
+
             if (currentSong == null && _enterController.isDismissed) {
               return const SizedBox.shrink();
             }
 
-            final Widget fullPlayer = FullPlayerContent(
-              currentSong: currentSong,
-              artworkData: artworkData,
-              safePadding: MediaQuery.of(context).padding,
-              onCloseTap: _onCloseTap,
-              isPlaying: isPlaying,
-              onPlayPause: () => context.read<MusicPlayerBloc>().add(
-                MusicPlayerEvent.togglePlayPause(),
+            final Widget fullPlayer = GestureDetector(
+              onVerticalDragUpdate: handleDragUpdate,
+              onVerticalDragEnd: handleDragEnd,
+              child: FullPlayerContent(
+                currentSong: currentSong,
+                artworkData: artworkData,
+                safePadding: MediaQuery.of(context).padding,
+                onCloseTap: _onCloseTap,
+                isPlaying: isPlaying,
+                onPlayPause: () => context.read<MusicPlayerBloc>().add(
+                  MusicPlayerEvent.togglePlayPause(),
+                ),
+                style: settingsState.vinylStyle,
               ),
-              style: settingsState.vinylStyle,
             );
 
             return AnimatedBuilder(
@@ -446,31 +474,8 @@ class _MusicPlayerState extends State<MusicPlayer>
                             ),
                             child: GestureDetector(
                               onTap: _onExpandTap,
-                              onVerticalDragUpdate: (details) {
-                                final double delta =
-                                    details.primaryDelta! /
-                                    (maxPlayerHeight - _miniHeight);
-                                if (_miniHeight + (details.primaryDelta ?? 0) >
-                                    maxPlayerHeight) {
-                                  return;
-                                }
-                                _expandController.value -= delta;
-                              },
-                              onVerticalDragEnd: (details) {
-                                const double velocityThreshold = 300.0;
-                                final double velocity =
-                                    details.primaryVelocity!;
-
-                                if (velocity < -velocityThreshold) {
-                                  _expandController.forward();
-                                } else if (velocity > velocityThreshold) {
-                                  _expandController.reverse();
-                                } else if (_expandController.value > 0.5) {
-                                  _expandController.forward();
-                                } else {
-                                  _expandController.reverse();
-                                }
-                              },
+                              onVerticalDragUpdate: handleDragUpdate,
+                              onVerticalDragEnd: handleDragEnd,
                               child: PageView.builder(
                                 controller: _pageController,
                                 itemCount: null,
