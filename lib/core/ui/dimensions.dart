@@ -1,3 +1,3 @@
 class Dimensions {
-  static const double kMiniPlayerHeight = 98.0;
+  static const double kMiniPlayerHeight = 85.0;
 }

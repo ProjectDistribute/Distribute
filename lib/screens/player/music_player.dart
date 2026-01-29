@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:distributeapp/blocs/music/position_cubit.dart';
 import 'package:distributeapp/screens/player/player_fullscreen_content.dart';
 import 'package:distributeapp/core/preferences/settings_cubit.dart';
+import 'package:distributeapp/core/ui/dimensions.dart';
 import 'package:distributeapp/core/preferences/settings_state.dart';
 import 'package:distributeapp/screens/player/player_mini_content.dart';
 import 'package:distributeapp/blocs/music/music_player_bloc.dart';
@@ -15,6 +16,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+/// Duration for the artwork crossfade animation
+const Duration _artworkCrossfadeDuration = Duration(milliseconds: 600);
+
 class MusicPlayer extends StatefulWidget {
   const MusicPlayer({super.key});
 
@@ -24,7 +28,7 @@ class MusicPlayer extends StatefulWidget {
 
 class _MusicPlayerState extends State<MusicPlayer>
     with TickerProviderStateMixin {
-  static const double _miniHeight = 85;
+  static const double _miniHeight = Dimensions.kMiniPlayerHeight;
   static const double _miniRadius = 12.0;
 
   late final AnimationController _enterController;
@@ -254,7 +258,7 @@ class _MusicPlayerState extends State<MusicPlayer>
             final miniMargin = EdgeInsets.fromLTRB(
               10,
               10,
-              0,
+              10,
               MediaQuery.of(context).padding.bottom + 90,
             );
 
@@ -338,7 +342,8 @@ class _MusicPlayerState extends State<MusicPlayer>
                   EdgeInsets.zero,
                   t,
                 )!;
-                final miniPlayerWidth = maxPlayerWidth - (miniMargin.left * 2);
+                final miniPlayerWidth =
+                    maxPlayerWidth - miniMargin.left - miniMargin.right;
                 final currentWidth = lerpDouble(
                   miniPlayerWidth,
                   maxPlayerWidth,
@@ -358,17 +363,17 @@ class _MusicPlayerState extends State<MusicPlayer>
                   maxHeight: imageSide,
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
-                    child: artworkData.imageFileHq != null
+                    child: artworkData.imageFileLq != null
                         ? Image.file(
-                            artworkData.imageFileHq!,
-                            key: ValueKey(artworkData.imageFileHq!.path),
+                            artworkData.imageFileLq!,
+                            key: ValueKey(artworkData.imageFileLq!.path),
                             cacheWidth: 800,
                             fit: BoxFit.cover,
                             height: double.infinity,
                             width: double.infinity,
                           )
                         : Image.asset(
-                            'assets/default-playlist-hq.png',
+                            'assets/default-playlist-lq.png',
                             key: const ValueKey('default-playlist'),
                             fit: BoxFit.cover,
                             height: double.infinity,
@@ -427,23 +432,9 @@ class _MusicPlayerState extends State<MusicPlayer>
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 350),
-                            transitionBuilder: (child, animation) =>
-                                FadeTransition(
-                                  opacity: animation,
-                                  child: child,
-                                ),
-                            child: RepaintBoundary(
-                              child: _PlayerArtwork(
-                                key: ValueKey(
-                                  artworkData.imageFileHq?.path ??
-                                      artworkData.imageFileLq?.path ??
-                                      artworkData.artUri?.toString() ??
-                                      'default-artwork',
-                                ),
-                                artworkData: artworkData,
-                              ),
+                          RepaintBoundary(
+                            child: _CrossfadeArtwork(
+                              currentArtwork: artworkData,
                             ),
                           ),
                           ScrollConfiguration(
@@ -459,60 +450,55 @@ class _MusicPlayerState extends State<MusicPlayer>
                               onTap: _onExpandTap,
                               onVerticalDragUpdate: handleDragUpdate,
                               onVerticalDragEnd: handleDragEnd,
-                              child: t < 1.0
-                                  ? Opacity(
-                                      opacity: 1.0 - t,
-                                      child: PageView.builder(
-                                        controller: _pageController,
-                                        itemCount: null,
-                                        physics: const PageScrollPhysics(),
-                                        onPageChanged: (page) {
-                                          if (state.queue.isEmpty) return;
-                                          var index = page % state.queue.length;
+                              child: Opacity(
+                                opacity: 1.0 - t,
+                                child: PageView.builder(
+                                  controller: _pageController,
+                                  itemCount: null,
+                                  physics: const PageScrollPhysics(),
+                                  onPageChanged: (page) {
+                                    if (state.queue.isEmpty) return;
+                                    var index = page % state.queue.length;
 
-                                          if (_isProgrammaticPageChange) {
-                                            if (index ==
-                                                _programmaticTargetIndex) {
-                                              _isProgrammaticPageChange = false;
-                                              _programmaticTargetIndex = -1;
-                                            }
-                                            return;
-                                          }
+                                    if (_isProgrammaticPageChange) {
+                                      if (index == _programmaticTargetIndex) {
+                                        _isProgrammaticPageChange = false;
+                                        _programmaticTargetIndex = -1;
+                                      }
+                                      return;
+                                    }
 
-                                          debugPrint("index: $index");
-                                          debugPrint(
-                                            "queueIndex: ${state.queueIndex}",
-                                          );
+                                    debugPrint("index: $index");
+                                    debugPrint(
+                                      "queueIndex: ${state.queueIndex}",
+                                    );
 
-                                          if (index != state.queueIndex) {
-                                            context.read<MusicPlayerBloc>().add(
-                                              MusicPlayerEvent.skipToQueueItem(
-                                                index,
-                                              ),
-                                            );
-                                          }
-                                        },
-                                        itemBuilder: (context, index) {
-                                          if (state.queue.isEmpty) {
-                                            return const SizedBox.shrink();
-                                          }
-                                          final queueIndex =
-                                              index % state.queue.length;
-                                          final item = state.queue[queueIndex];
-                                          final isCurrentItem =
-                                              queueIndex == state.queueIndex;
+                                    if (index != state.queueIndex) {
+                                      context.read<MusicPlayerBloc>().add(
+                                        MusicPlayerEvent.skipToQueueItem(index),
+                                      );
+                                    }
+                                  },
+                                  itemBuilder: (context, index) {
+                                    if (state.queue.isEmpty) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    final queueIndex =
+                                        index % state.queue.length;
+                                    final item = state.queue[queueIndex];
+                                    final isCurrentItem =
+                                        queueIndex == state.queueIndex;
 
-                                          return _buildSlideContent(
-                                            context,
-                                            item,
-                                            artworkData,
-                                            isCurrent: isCurrentItem,
-                                            showMiniProgress: t < 0.5,
-                                          );
-                                        },
-                                      ),
-                                    )
-                                  : SizedBox.shrink(),
+                                    return _buildSlideContent(
+                                      context,
+                                      item,
+                                      artworkData,
+                                      isCurrent: isCurrentItem,
+                                      showMiniProgress: t < 0.5,
+                                    );
+                                  },
+                                ),
+                              ),
                             ),
                           ),
                           IgnorePointer(
@@ -575,35 +561,105 @@ class _MusicPlayerState extends State<MusicPlayer>
   }
 }
 
-class _PlayerArtwork extends StatelessWidget {
-  final ArtworkData artworkData;
+/// Widget that displays artwork with crossfade support between song changes
+class _CrossfadeArtwork extends StatefulWidget {
+  final ArtworkData currentArtwork;
 
-  const _PlayerArtwork({super.key, required this.artworkData});
+  const _CrossfadeArtwork({super.key, required this.currentArtwork});
 
   @override
-  Widget build(BuildContext context) {
-    final image = artworkData.imageFileHq != null
+  State<_CrossfadeArtwork> createState() => _CrossfadeArtworkState();
+}
+
+class _CrossfadeArtworkState extends State<_CrossfadeArtwork>
+    with TickerProviderStateMixin {
+  ArtworkData? _displayedArtwork;
+  ArtworkData? _fadingOutArtwork;
+  late AnimationController _fadeController;
+
+  @override
+  void initState() {
+    super.initState();
+    _displayedArtwork = widget.currentArtwork;
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: _artworkCrossfadeDuration,
+    );
+    _fadeController.value = 1.0;
+  }
+
+  @override
+  void didUpdateWidget(_CrossfadeArtwork oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Check if artwork actually changed
+    final oldPath = _getArtworkKey(oldWidget.currentArtwork);
+    final newPath = _getArtworkKey(widget.currentArtwork);
+
+    if (oldPath != newPath) {
+      // Start crossfade
+      _fadingOutArtwork = oldWidget.currentArtwork;
+      _displayedArtwork = widget.currentArtwork;
+
+      _fadeController.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    super.dispose();
+  }
+
+  String _getArtworkKey(ArtworkData artwork) {
+    return artwork.imageFileLq?.path ??
+        artwork.imageFileHq?.path ??
+        artwork.artUri?.toString() ??
+        'default-artwork';
+  }
+
+  Widget _buildImage(ArtworkData artwork) {
+    return artwork.imageFileLq != null
         ? Image.file(
-            artworkData.imageFileHq!,
-            key: ValueKey(artworkData.imageFileHq!.path),
+            artwork.imageFileLq!,
+            key: ValueKey(artwork.imageFileLq!.path),
             cacheWidth: 400,
             fit: BoxFit.cover,
             height: double.infinity,
             width: double.infinity,
           )
         : Image.asset(
-            'assets/default-playlist-hq.png',
+            'assets/default-playlist-lq.png',
             key: const ValueKey('default-asset'),
             fit: BoxFit.cover,
             height: double.infinity,
             width: double.infinity,
           );
+  }
 
+  Widget _buildBlurredLayer(Widget child) {
+    return ImageFiltered(
+      imageFilter: ImageFilter.blur(
+        sigmaX: 5,
+        sigmaY: 5,
+        tileMode: TileMode.clamp,
+      ),
+      child: OverflowBox(
+        minWidth: 0,
+        minHeight: 0,
+        maxWidth: MediaQuery.of(context).size.width,
+        maxHeight: MediaQuery.of(context).size.width,
+        child: child,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      key: ValueKey(artworkData.imageFileHq?.path),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: artworkData.backgroundColor,
+        color: widget.currentArtwork.backgroundColor,
         borderRadius: BorderRadius.circular(0),
         boxShadow: [
           BoxShadow(
@@ -616,6 +672,27 @@ class _PlayerArtwork extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
+          // Fading out artwork (previous)
+          if (_fadingOutArtwork != null)
+            AnimatedBuilder(
+              animation: _fadeController,
+              builder: (context, child) {
+                return Opacity(
+                  opacity: 1.0 - _fadeController.value,
+                  child: child,
+                );
+              },
+              child: _buildBlurredLayer(_buildImage(_fadingOutArtwork!)),
+            ),
+          // Fading in artwork (current)
+          AnimatedBuilder(
+            animation: _fadeController,
+            builder: (context, child) {
+              return Opacity(opacity: _fadeController.value, child: child);
+            },
+            child: _buildBlurredLayer(_buildImage(_displayedArtwork!)),
+          ),
+          // Dark overlay gradient
           Container(
             foregroundDecoration: BoxDecoration(
               gradient: LinearGradient(
@@ -627,22 +704,10 @@ class _PlayerArtwork extends StatelessWidget {
                 ],
               ),
             ),
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(
-                sigmaX: 5,
-                sigmaY: 5,
-                tileMode: TileMode.clamp,
-              ),
-              child: OverflowBox(
-                minWidth: 0,
-                minHeight: 0,
-                maxWidth: MediaQuery.of(context).size.width,
-                maxHeight: MediaQuery.of(context).size.width,
-                child: image,
-              ),
+            child: Container(
+              color: Colors.black.withAlpha((255 * 0.2).toInt()),
             ),
           ),
-          Container(color: Colors.black.withAlpha((255 * 0.2).toInt())),
         ],
       ),
     );

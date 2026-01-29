@@ -520,6 +520,8 @@ class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar> {
           children: [
             Scaffold(
               body: BlocBuilder<MusicPlayerBloc, ControllerState>(
+                buildWhen: (previous, current) =>
+                    previous.currentSong != current.currentSong,
                 builder: (context, state) {
                   final bottomPadding = state.currentSong != null
                       ? Dimensions.kMiniPlayerHeight
