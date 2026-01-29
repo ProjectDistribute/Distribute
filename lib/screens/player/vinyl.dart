@@ -167,76 +167,95 @@ class _VinylWidgetState extends State<VinylWidget>
         ];
 
         return RepaintBoundary(
-          child: AnimatedBuilder(
-            animation: _rotationNotifier,
-            builder: (context, _) {
-              final double angle = _rotationNotifier.value * 2 * math.pi;
+          child: ClipRect(
+            child: SizedBox(
+              width: size,
+              height: size,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  AnimatedBuilder(
+                    animation: _rotationNotifier,
+                    builder: (context, _) {
+                      final double angle =
+                          _rotationNotifier.value * 2 * math.pi;
 
-              return SizedBox(
-                width: size,
-                height: size,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Transform.rotate(
-                      angle: angle,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          coverImage,
-                          // Circle Blur in the middle
-                          Center(
-                            child: Container(
-                              width: size * 0.33,
-                              height: size * 0.33,
-                              decoration: BoxDecoration(shape: BoxShape.circle),
-                              child: ClipOval(
-                                child: BackdropFilter(
-                                  filter: ImageFilter.blur(
-                                    sigmaX: 5,
-                                    sigmaY: 5,
-                                  ),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.05,
-                                      ),
-                                      border: Border.all(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.1,
+                      return Transform.rotate(
+                        angle: angle,
+                        child: ClipRect(
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              coverImage,
+                              // Circle Blur in the middle
+                              widget.style == VinylStyle.transparent
+                                  ? Center(
+                                      child: Container(
+                                        width: size * 0.33,
+                                        height: size * 0.33,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
                                         ),
-                                        width: 0.5,
+                                        child: BackdropFilter(
+                                          filter: ImageFilter.blur(
+                                            sigmaX: 5,
+                                            sigmaY: 5,
+                                          ),
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              color: Colors.white.withValues(
+                                                alpha: 0.05,
+                                              ),
+                                              border: Border.all(
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.1,
+                                                ),
+                                                width: 0.5,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
+                                    )
+                                  : SizedBox.shrink(),
+                              vinylBg,
+                            ],
                           ),
-                          vinylBg,
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    },
+                  ),
 
-                    vinylStatic,
+                  vinylStatic,
 
-                    ShaderMask(
-                      shaderCallback: (Rect bounds) {
-                        return LinearGradient(
-                          begin: Alignment.topRight,
-                          end: Alignment.bottomLeft,
-                          colors: gradientColors,
-                          stops: const [0.0, 0.4, 0.5, 0.6, 1.0],
-                        ).createShader(bounds);
+                  ClipRect(
+                    child: AnimatedBuilder(
+                      animation: _rotationNotifier,
+                      builder: (context, _) {
+                        final double angle =
+                            _rotationNotifier.value * 2 * math.pi;
+                        return ShaderMask(
+                          shaderCallback: (Rect bounds) {
+                            return LinearGradient(
+                              begin: Alignment.topRight,
+                              end: Alignment.bottomLeft,
+                              colors: gradientColors,
+                              stops: const [0.0, 0.4, 0.5, 0.6, 1.0],
+                            ).createShader(bounds);
+                          },
+                          blendMode: BlendMode.dstIn,
+                          child: Transform.rotate(
+                            angle: angle,
+                            child: vinylEffect,
+                          ),
+                        );
                       },
-                      blendMode: BlendMode.dstIn,
-                      child: Transform.rotate(angle: angle, child: vinylEffect),
                     ),
-                  ],
-                ),
-              );
-            },
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       },

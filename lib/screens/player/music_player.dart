@@ -165,11 +165,11 @@ class _MusicPlayerState extends State<MusicPlayer>
           isCurrent ? context.read<MusicPlayerBloc>().state.isPlaying : false,
         ),
         if (isCurrent && showMiniProgress)
-          RepaintBoundary(
-            child: Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: RepaintBoundary(
               child: BlocBuilder<PositionCubit, Duration>(
                 builder: (context, currentPosition) {
                   final state = context.read<MusicPlayerBloc>().state;
@@ -459,49 +459,60 @@ class _MusicPlayerState extends State<MusicPlayer>
                               onTap: _onExpandTap,
                               onVerticalDragUpdate: handleDragUpdate,
                               onVerticalDragEnd: handleDragEnd,
-                              child: PageView.builder(
-                                controller: _pageController,
-                                itemCount: null,
-                                physics: const PageScrollPhysics(),
-                                onPageChanged: (page) {
-                                  if (state.queue.isEmpty) return;
-                                  var index = page % state.queue.length;
+                              child: t < 1.0
+                                  ? Opacity(
+                                      opacity: 1.0 - t,
+                                      child: PageView.builder(
+                                        controller: _pageController,
+                                        itemCount: null,
+                                        physics: const PageScrollPhysics(),
+                                        onPageChanged: (page) {
+                                          if (state.queue.isEmpty) return;
+                                          var index = page % state.queue.length;
 
-                                  if (_isProgrammaticPageChange) {
-                                    if (index == _programmaticTargetIndex) {
-                                      _isProgrammaticPageChange = false;
-                                      _programmaticTargetIndex = -1;
-                                    }
-                                    return;
-                                  }
+                                          if (_isProgrammaticPageChange) {
+                                            if (index ==
+                                                _programmaticTargetIndex) {
+                                              _isProgrammaticPageChange = false;
+                                              _programmaticTargetIndex = -1;
+                                            }
+                                            return;
+                                          }
 
-                                  debugPrint("index: $index");
-                                  debugPrint("queueIndex: ${state.queueIndex}");
+                                          debugPrint("index: $index");
+                                          debugPrint(
+                                            "queueIndex: ${state.queueIndex}",
+                                          );
 
-                                  if (index != state.queueIndex) {
-                                    context.read<MusicPlayerBloc>().add(
-                                      MusicPlayerEvent.skipToQueueItem(index),
-                                    );
-                                  }
-                                },
-                                itemBuilder: (context, index) {
-                                  if (state.queue.isEmpty) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  final queueIndex = index % state.queue.length;
-                                  final item = state.queue[queueIndex];
-                                  final isCurrentItem =
-                                      queueIndex == state.queueIndex;
+                                          if (index != state.queueIndex) {
+                                            context.read<MusicPlayerBloc>().add(
+                                              MusicPlayerEvent.skipToQueueItem(
+                                                index,
+                                              ),
+                                            );
+                                          }
+                                        },
+                                        itemBuilder: (context, index) {
+                                          if (state.queue.isEmpty) {
+                                            return const SizedBox.shrink();
+                                          }
+                                          final queueIndex =
+                                              index % state.queue.length;
+                                          final item = state.queue[queueIndex];
+                                          final isCurrentItem =
+                                              queueIndex == state.queueIndex;
 
-                                  return _buildSlideContent(
-                                    context,
-                                    item,
-                                    artworkData,
-                                    isCurrent: isCurrentItem,
-                                    showMiniProgress: t < 0.5,
-                                  );
-                                },
-                              ),
+                                          return _buildSlideContent(
+                                            context,
+                                            item,
+                                            artworkData,
+                                            isCurrent: isCurrentItem,
+                                            showMiniProgress: t < 0.5,
+                                          );
+                                        },
+                                      ),
+                                    )
+                                  : SizedBox.shrink(),
                             ),
                           ),
                           IgnorePointer(

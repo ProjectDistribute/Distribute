@@ -82,24 +82,24 @@ class FullPlayerContent extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Flexible(
-          //   child: Padding(
-          //     padding: const EdgeInsets.only(top: 8.0),
-          //     child: AspectRatio(
-          //       aspectRatio: 1,
-          //       child: artworkFile != null
-          //           ? VinylWidget(
-          //               coverFile: artworkFile,
-          //               backgroundColor: artworkData.backgroundColor,
-          //               effectColor: artworkData.effectColor,
-          //               isPlaying: isPlaying,
-          //               easterEggs: easterEggs,
-          //               style: style,
-          //             )
-          //           : const SizedBox(),
-          //     ),
-          //   ),
-          // ),
+          Flexible(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: artworkFile != null
+                    ? VinylWidget(
+                        coverFile: artworkFile,
+                        backgroundColor: artworkData.backgroundColor,
+                        effectColor: artworkData.effectColor,
+                        isPlaying: isPlaying,
+                        easterEggs: easterEggs,
+                        style: style,
+                      )
+                    : const SizedBox(),
+              ),
+            ),
+          ),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
