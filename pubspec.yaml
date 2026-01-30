@@ -98,6 +98,8 @@ flutter:
     - assets/
     - assets/vinyl/
     - assets/icon/
+  shaders:
+    - shaders/vinyl_effect.frag
     
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg

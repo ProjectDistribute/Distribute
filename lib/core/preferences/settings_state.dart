@@ -14,6 +14,7 @@ sealed class SettingsState with _$SettingsState {
     required bool dummySoundEnabled,
     required bool debugMode,
     required bool preloadNextSongEnabled,
+    required bool keepVinylSpinningWhenUnfocused,
     required String? customDownloadPath,
     required String defaultDataPath,
     required VinylStyle vinylStyle,

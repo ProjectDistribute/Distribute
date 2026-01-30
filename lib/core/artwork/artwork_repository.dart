@@ -1,10 +1,15 @@
 import 'dart:io';
+import 'dart:convert';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:distributeapp/core/preferences/settings_repository.dart';
+import 'package:distributeapp/core/artwork/artwork_processor.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import 'package:crypto/crypto.dart';
+import 'package:image/image.dart' as img;
 
 class ArtworkData {
   final File? imageFileHq;
@@ -55,6 +60,17 @@ class ArtworkRepository {
 
   ArtworkRepository(this.client, {required this.settings});
 
+  Color _vibrantize(Color color) {
+    final hsl = HSLColor.fromColor(color);
+    final saturation = (hsl.saturation + 0.0).clamp(0.0, 1.0);
+    final lightness = (hsl.lightness - 0.25).clamp(0.0, 1.0);
+    return hsl.withSaturation(saturation).withLightness(lightness).toColor();
+  }
+
+  Color _contrastMonochrome(Color color) {
+    return color.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+  }
+
   void clearCache() {
     _memoryCache.clear();
     _pendingDownloads.clear();
@@ -68,7 +84,7 @@ class ArtworkRepository {
       return _pendingDownloads[key]!;
     }
 
-    final future = _downloadArtworkFile(albumId, quality);
+    final future = _ensureArtworkFile(albumId, quality);
     _pendingDownloads[key] = future;
 
     future.whenComplete(() {
@@ -76,6 +92,56 @@ class ArtworkRepository {
     });
 
     return future;
+  }
+
+  Future<File> _ensureArtworkFile(String albumId, ArtQuality quality) async {
+    final absolutePath = getAbsolutePath(albumId, quality);
+    final file = File(absolutePath);
+
+    if (await file.exists()) {
+      return file;
+    }
+
+    await file.parent.create(recursive: true);
+
+    if (quality == ArtQuality.lq) {
+      return _generateLowQualityArtwork(albumId, file);
+    }
+
+    return _downloadArtworkFile(albumId, quality);
+  }
+
+  Future<File> _generateLowQualityArtwork(
+    String albumId,
+    File targetFile,
+  ) async {
+    try {
+      final hqFile = await getArtworkFile(albumId, ArtQuality.hq);
+      final bytes = await hqFile.readAsBytes();
+      final resizedBytes = await compute(
+        _resizeImageBytes,
+        _ArtworkResizeParams(
+          bytes,
+          _kLowQualityMaxDimension,
+          _kLowQualityJpegQuality,
+        ),
+      );
+
+      final tempFile = File('${targetFile.path}.tmp');
+      if (await tempFile.exists()) {
+        await tempFile.delete();
+      }
+
+      await tempFile.writeAsBytes(resizedBytes, flush: true);
+      if (await tempFile.exists()) {
+        await tempFile.rename(targetFile.path);
+      }
+
+      return targetFile;
+    } catch (e) {
+      debugPrint('Failed to generate low quality artwork: $e');
+      return _downloadArtworkFile(albumId, ArtQuality.lq);
+    }
   }
 
   Future<File> _downloadArtworkFile(String albumId, ArtQuality quality) async {
@@ -146,15 +212,16 @@ class ArtworkRepository {
         return newData;
       }
 
-      final scheme = await ColorScheme.fromImageProvider(
-        provider: FileImage(file),
-        brightness: Brightness.dark,
+      final colors = await extractArtworkColors(file);
+      final primaryColor = Color(colors.primaryColor);
+      final backgroundColor = Color(colors.backgroundColor);
+      final oppositeColor = _contrastMonochrome(backgroundColor);
+
+      debugPrint("Primary color HEX: ${primaryColor.value.toRadixString(16)}");
+      debugPrint(
+        "Background color HEX: ${backgroundColor.value.toRadixString(16)}",
       );
-
-      final primaryColor = scheme.secondary;
-      final backgroundColor = scheme.surface;
-      final oppositeColor = scheme.onSurface;
-
+      debugPrint("Effect color HEX: ${oppositeColor.value.toRadixString(16)}");
       final data = ArtworkData(
         imageFileHq: quality == ArtQuality.hq ? file : cached?.imageFileHq,
         imageFileLq: quality == ArtQuality.lq ? file : cached?.imageFileLq,
@@ -194,4 +261,41 @@ class ArtworkRepository {
     final root = settings.rootPath;
     return '$root/${getRelativePath(albumId, quality)}';
   }
+}
+
+const int _kLowQualityMaxDimension = 400;
+const int _kLowQualityJpegQuality = 80;
+
+class _ArtworkResizeParams {
+  final Uint8List bytes;
+  final int maxDimension;
+  final int quality;
+
+  _ArtworkResizeParams(this.bytes, this.maxDimension, this.quality);
+}
+
+List<int> _resizeImageBytes(_ArtworkResizeParams params) {
+  final decoded = img.decodeImage(params.bytes);
+  if (decoded == null) {
+    return params.bytes;
+  }
+
+  final width = decoded.width;
+  final height = decoded.height;
+  final largestDimension = max(width, height);
+  final ratio = largestDimension > params.maxDimension
+      ? params.maxDimension / largestDimension
+      : 1.0;
+
+  final newWidth = max(1, (width * ratio).round());
+  final newHeight = max(1, (height * ratio).round());
+
+  final resized = img.copyResize(
+    decoded,
+    width: newWidth,
+    height: newHeight,
+    interpolation: img.Interpolation.average,
+  );
+
+  return img.encodeJpg(resized, quality: params.quality);
 }

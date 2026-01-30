@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'dart:ui';
 
 import 'package:distributeapp/blocs/music/position_cubit.dart';
@@ -27,7 +26,7 @@ class MusicPlayer extends StatefulWidget {
 }
 
 class _MusicPlayerState extends State<MusicPlayer>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   static const double _miniHeight = Dimensions.kMiniPlayerHeight;
   static const double _miniRadius = 12.0;
 
@@ -42,10 +41,14 @@ class _MusicPlayerState extends State<MusicPlayer>
   final FocusNode _focusNode = FocusNode();
   bool _isProgrammaticPageChange = false;
   int _programmaticTargetIndex = -1;
+  bool _isWindowFocused = true;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _isWindowFocused =
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     _enterController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -93,7 +96,18 @@ class _MusicPlayerState extends State<MusicPlayer>
     _expandController.dispose();
     _pageController.dispose();
     _focusNode.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final focused = state == AppLifecycleState.resumed;
+    if (_isWindowFocused != focused) {
+      setState(() {
+        _isWindowFocused = focused;
+      });
+    }
   }
 
   void _onExpandTap() {
@@ -204,7 +218,9 @@ class _MusicPlayerState extends State<MusicPlayer>
 
     return BlocBuilder<SettingsCubit, SettingsState>(
       buildWhen: (previous, current) =>
-          previous.vinylStyle != current.vinylStyle,
+          previous.vinylStyle != current.vinylStyle ||
+          previous.keepVinylSpinningWhenUnfocused !=
+              current.keepVinylSpinningWhenUnfocused,
       builder: (context, settingsState) {
         return BlocConsumer<MusicPlayerBloc, ControllerState>(
           listenWhen: (previous, current) =>
@@ -311,17 +327,20 @@ class _MusicPlayerState extends State<MusicPlayer>
             final Widget fullPlayer = GestureDetector(
               onVerticalDragUpdate: handleDragUpdate,
               onVerticalDragEnd: handleDragEnd,
-              child: FullPlayerContent(
-                currentSong: currentSong,
-                artworkData: artworkData,
-                safePadding: MediaQuery.of(context).padding,
-                onCloseTap: _onCloseTap,
-                isPlaying: isPlaying,
-                onPlayPause: () => context.read<MusicPlayerBloc>().add(
-                  MusicPlayerEvent.togglePlayPause(),
+                child: FullPlayerContent(
+                  currentSong: currentSong,
+                  artworkData: artworkData,
+                  safePadding: MediaQuery.of(context).padding,
+                  onCloseTap: _onCloseTap,
+                  isPlaying: isPlaying,
+                  onPlayPause: () => context.read<MusicPlayerBloc>().add(
+                    MusicPlayerEvent.togglePlayPause(),
+                  ),
+                  style: settingsState.vinylStyle,
+                  isWindowFocused: _isWindowFocused,
+                  keepVinylSpinningWhenUnfocused:
+                      settingsState.keepVinylSpinningWhenUnfocused,
                 ),
-                style: settingsState.vinylStyle,
-              ),
             );
 
             return AnimatedBuilder(
@@ -351,12 +370,6 @@ class _MusicPlayerState extends State<MusicPlayer>
                 )!;
                 final currentRadius = lerpDouble(_miniRadius, 0, t)!;
                 final enterOffset = _slideAnimation.value.dy * _miniHeight;
-
-                final imageSide = lerpDouble(
-                  miniPlayerWidth,
-                  max(maxPlayerHeight, maxPlayerWidth),
-                  t,
-                )!;
 
                 final Widget backgroundColorOverlay = Container(
                   foregroundDecoration: BoxDecoration(
@@ -469,20 +482,7 @@ class _MusicPlayerState extends State<MusicPlayer>
                             ignoring: t < 0.5,
                             child: Opacity(
                               opacity: t.clamp(0.0, 1.0),
-                              child: RepaintBoundary(
-                                child: backgroundColorOverlay,
-                              ),
-                            ),
-                          ),
-                          IgnorePointer(
-                            ignoring: t < 0.5,
-                            child: Opacity(
-                              opacity: t.clamp(0.0, 1.0),
-                              child: Container(
-                                color: Colors.black.withAlpha(
-                                  (255 * 0.2 * t).toInt(),
-                                ),
-                              ),
+                              child: backgroundColorOverlay,
                             ),
                           ),
                           IgnorePointer(
@@ -529,7 +529,7 @@ class _MusicPlayerState extends State<MusicPlayer>
 class _CrossfadeArtwork extends StatefulWidget {
   final ArtworkData currentArtwork;
 
-  const _CrossfadeArtwork({super.key, required this.currentArtwork});
+  const _CrossfadeArtwork({required this.currentArtwork});
 
   @override
   State<_CrossfadeArtwork> createState() => _CrossfadeArtworkState();
@@ -583,10 +583,10 @@ class _CrossfadeArtworkState extends State<_CrossfadeArtwork>
   }
 
   Widget _buildImage(ArtworkData artwork) {
-    return artwork.imageFileLq != null
+    return artwork.imageFileHq != null
         ? Image.file(
-            artwork.imageFileLq!,
-            key: ValueKey(artwork.imageFileLq!.path),
+            artwork.imageFileHq!,
+            key: ValueKey(artwork.imageFileHq!.path),
             cacheWidth: 400,
             fit: BoxFit.cover,
             height: double.infinity,
@@ -604,17 +604,11 @@ class _CrossfadeArtworkState extends State<_CrossfadeArtwork>
   Widget _buildBlurredLayer(Widget child) {
     return ImageFiltered(
       imageFilter: ImageFilter.blur(
-        sigmaX: 5,
-        sigmaY: 5,
+        sigmaX: 6,
+        sigmaY: 6,
         tileMode: TileMode.clamp,
       ),
-      child: OverflowBox(
-        minWidth: 0,
-        minHeight: 0,
-        maxWidth: MediaQuery.of(context).size.width,
-        maxHeight: MediaQuery.of(context).size.width,
-        child: child,
-      ),
+      child: SizedBox.expand(child: child),
     );
   }
 
@@ -655,22 +649,6 @@ class _CrossfadeArtworkState extends State<_CrossfadeArtwork>
               return Opacity(opacity: _fadeController.value, child: child);
             },
             child: _buildBlurredLayer(_buildImage(_displayedArtwork!)),
-          ),
-          // Dark overlay gradient
-          Container(
-            foregroundDecoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.center,
-                colors: [
-                  const Color.fromARGB(80, 0, 0, 0),
-                  const Color.fromARGB(20, 0, 0, 0),
-                ],
-              ),
-            ),
-            child: Container(
-              color: Colors.black.withAlpha((255 * 0.2).toInt()),
-            ),
           ),
         ],
       ),

@@ -16,6 +16,8 @@ class SettingsCubit extends Cubit<SettingsState> {
           dummySoundEnabled: _repo.dummySoundEnabled,
           debugMode: _repo.debugMode,
           preloadNextSongEnabled: _repo.preloadNextSongEnabled,
+          keepVinylSpinningWhenUnfocused:
+              _repo.keepVinylSpinningWhenUnfocused,
           customDownloadPath: _repo.customDownloadPath,
           defaultDataPath: _repo.defaultDataPath,
           vinylStyle: _repo.vinylStyle,
@@ -55,6 +57,11 @@ class SettingsCubit extends Cubit<SettingsState> {
   void setPreloadNextSongEnabled(bool enabled) async {
     await _repo.setPreloadNextSongEnabled(enabled);
     emit(state.copyWith(preloadNextSongEnabled: enabled));
+  }
+
+  void setKeepVinylSpinningWhenUnfocused(bool enabled) async {
+    await _repo.setKeepVinylSpinningWhenUnfocused(enabled);
+    emit(state.copyWith(keepVinylSpinningWhenUnfocused: enabled));
   }
 
   Future<void> setCustomDownloadPath(String? path) async {

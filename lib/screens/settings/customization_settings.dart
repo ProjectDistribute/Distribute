@@ -56,6 +56,27 @@ class CustomizationSettingsScreen extends StatelessWidget {
               },
             ),
           ),
+          Card(
+            child: BlocBuilder<SettingsCubit, SettingsState>(
+              builder: (context, state) {
+                return HoverableListTile(
+                  leading: SettingsIcon(AppIcons.equalizer),
+                  title: const Text(
+                    "Vinyl spins in background",
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  trailing: Switch(
+                    value: state.keepVinylSpinningWhenUnfocused,
+                    onChanged: (value) {
+                      context
+                          .read<SettingsCubit>()
+                          .setKeepVinylSpinningWhenUnfocused(value);
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
         ],
       ),
     );

@@ -65,6 +65,8 @@ class SettingsRepository {
   }
 
   static const _kPreloadNextSongEnabled = 'preload_next_song_enabled';
+  static const _kKeepVinylSpinningWhenUnfocused =
+      'keep_vinyl_spinning_when_unfocused';
 
   bool get preloadNextSongEnabled {
     return _prefs.getBool(_kPreloadNextSongEnabled) ?? true;
@@ -72,6 +74,14 @@ class SettingsRepository {
 
   Future<void> setPreloadNextSongEnabled(bool enabled) async {
     await _prefs.setBool(_kPreloadNextSongEnabled, enabled);
+  }
+
+  bool get keepVinylSpinningWhenUnfocused {
+    return _prefs.getBool(_kKeepVinylSpinningWhenUnfocused) ?? false;
+  }
+
+  Future<void> setKeepVinylSpinningWhenUnfocused(bool enabled) async {
+    await _prefs.setBool(_kKeepVinylSpinningWhenUnfocused, enabled);
   }
 
   String? get customDownloadPath {

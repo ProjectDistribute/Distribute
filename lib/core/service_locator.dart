@@ -31,6 +31,7 @@ import 'package:distributeapp/core/services/navigation_service.dart';
 import 'package:distributeapp/core/services/app_links_service.dart';
 import 'package:distributeapp/repositories/auth_repository.dart';
 import 'package:distributeapp/repositories/folder_repository.dart';
+import 'package:distributeapp/repositories/download/song_download_service.dart';
 import 'package:distributeapp/repositories/playlist_repository.dart';
 import 'package:distributeapp/repositories/search_repository.dart';
 import 'package:distributeapp/repositories/storage_repository.dart';
@@ -115,6 +116,13 @@ Future<void> initDependencies() async {
     () => SearchRepository(sl<AppDatabase>().searchDao, sl<SearchApi>()),
   );
   sl.registerLazySingleton(() => ArtworkRepository(sl(), settings: sl()));
+  sl.registerLazySingleton(
+    () => SongDownloadService(
+      sl<DownloadApi>(),
+      sl<ArtworkRepository>(),
+      sl<PlaylistRepository>(),
+    ),
+  );
 
   final musicController = MusicPlayerController(
     artworkRepository: sl<ArtworkRepository>(),
@@ -138,7 +146,12 @@ Future<void> initDependencies() async {
   sl.registerFactory(() => RequestsCubit(sl()));
   sl.registerFactory(() => MusicPlayerBloc(controller: sl()));
   sl.registerFactory(() => PositionCubit(controller: sl(), musicCubit: sl()));
-  sl.registerFactory(() => DownloadCubit(sl(), sl<PlaylistRepository>()));
+  sl.registerFactory(
+    () => DownloadCubit(
+      sl<SongDownloadService>(),
+      sl<PlaylistRepository>(),
+    ),
+  );
   sl.registerFactory(() => SyncCubit(sl()));
 
   sl.registerLazySingleton(() => StorageRepository());

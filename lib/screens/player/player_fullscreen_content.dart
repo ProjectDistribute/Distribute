@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:distributeapp/model/song.dart';
 import 'package:distributeapp/screens/player/player_slider.dart';
 import 'package:distributeapp/screens/player/queue_sheet.dart';
@@ -19,6 +18,8 @@ class FullPlayerContent extends StatelessWidget {
   final VoidCallback onCloseTap;
   final VoidCallback onPlayPause;
   final bool isPlaying;
+  final bool isWindowFocused;
+  final bool keepVinylSpinningWhenUnfocused;
   final VinylStyle style;
 
   const FullPlayerContent({
@@ -29,6 +30,8 @@ class FullPlayerContent extends StatelessWidget {
     required this.onCloseTap,
     required this.onPlayPause,
     required this.isPlaying,
+    required this.isWindowFocused,
+    required this.keepVinylSpinningWhenUnfocused,
     required this.style,
   });
 
@@ -83,26 +86,29 @@ class FullPlayerContent extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            const SizedBox(height: 32),
             Flexible(
               child: Padding(
                 padding: const EdgeInsets.only(top: 8.0),
                 child: AspectRatio(
                   aspectRatio: 1,
                   child: artworkFile != null
-                      ? RepaintBoundary(
-                          child: VinylWidget(
-                            coverFile: artworkFile,
-                            backgroundColor: artworkData.backgroundColor,
-                            effectColor: artworkData.effectColor,
-                            isPlaying: isPlaying,
-                            easterEggs: easterEggs,
-                            style: style,
-                          ),
+                      ? VinylWidget(
+                          coverFile: artworkFile,
+                          backgroundColor: artworkData.backgroundColor,
+                          effectColor: artworkData.effectColor,
+                          isPlaying: isPlaying,
+                          easterEggs: easterEggs,
+                          isWindowFocused: isWindowFocused,
+                          keepSpinningWhenUnfocused:
+                              keepVinylSpinningWhenUnfocused,
+                          style: style,
                         )
                       : const SizedBox(),
                 ),
               ),
             ),
+            const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

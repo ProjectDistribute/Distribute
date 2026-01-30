@@ -1,5 +1,5 @@
-import 'package:distributeapp/api/download_api.dart';
 import 'package:distributeapp/model/song.dart';
+import 'package:distributeapp/repositories/download/song_download_service.dart';
 import 'package:distributeapp/repositories/playlist_repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -25,14 +25,17 @@ abstract class DownloadState with _$DownloadState {
 }
 
 class DownloadCubit extends Cubit<DownloadState> {
-  final DownloadApi _api;
+  final SongDownloadService _downloadService;
   final PlaylistRepository _playlistRepository;
 
   final List<Song> _downloadQueue = [];
 
   bool _isDownloading = false;
 
-  DownloadCubit(this._api, this._playlistRepository)
+  DownloadCubit(
+    this._downloadService,
+    this._playlistRepository,
+  )
     : super(const DownloadState());
 
   void downloadSong(Song song) {
@@ -109,15 +112,12 @@ class DownloadCubit extends Cubit<DownloadState> {
     _updateStatus(song.id, const DownloadStatus.loading(progress: 0.0));
 
     try {
-      await _api.downloadFile(song, (received, total) {
-        if (total != -1) {
-          _updateStatus(
-            song.id,
-            DownloadStatus.loading(progress: received / total),
-          );
-        }
+      await _downloadService.downloadSongWithArtwork(song, (progress) {
+        _updateStatus(
+          song.id,
+          DownloadStatus.loading(progress: progress),
+        );
       });
-      await _playlistRepository.updateSongDownloaded(song.id, true);
       _updateStatus(song.id, const DownloadStatus.success());
     } catch (e) {
       _updateStatus(song.id, DownloadStatus.error(message: e.toString()));
@@ -130,8 +130,7 @@ class DownloadCubit extends Cubit<DownloadState> {
 
   Future<void> deleteFile(Song song) async {
     try {
-      await _api.deleteFile(song);
-      await _playlistRepository.updateSongDownloaded(song.id, false);
+      await _downloadService.deleteSongFile(song);
       _updateStatus(song.id, const DownloadStatus.initial());
     } catch (e) {
       _updateStatus(song.id, DownloadStatus.error(message: e.toString()));

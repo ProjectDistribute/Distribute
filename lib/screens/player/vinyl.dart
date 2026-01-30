@@ -1,8 +1,11 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui';
+import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:distributeapp/core/preferences/vinyl_style.dart';
 
 class VinylWidget extends StatefulWidget {
@@ -11,6 +14,8 @@ class VinylWidget extends StatefulWidget {
   final Color effectColor;
   final bool isPlaying;
   final List<bool> easterEggs;
+  final bool isWindowFocused;
+  final bool keepSpinningWhenUnfocused;
   final VinylStyle style;
 
   const VinylWidget({
@@ -20,6 +25,8 @@ class VinylWidget extends StatefulWidget {
     required this.effectColor,
     required this.isPlaying,
     required this.easterEggs,
+    required this.isWindowFocused,
+    required this.keepSpinningWhenUnfocused,
     required this.style,
   });
 
@@ -40,6 +47,19 @@ class _VinylWidgetState extends State<VinylWidget>
   static const double _friction = 0.2;
 
   static const int _cacheWidth = 2048;
+  static const double _coverRatio = 0.88;
+
+  ui.FragmentShader? _vinylEffectFragmentShader;
+  bool _shaderReady = false;
+  ui.Image? _vinylScratchImage;
+  ui.Image? _vinylSpinningImage;
+  ui.Image? _vinylStaticImage;
+  ui.Image? _coverImage;
+  ImageStream? _coverStream;
+  ImageStreamListener? _coverListener;
+  int? _coverCacheDimension;
+  int? _lastCacheDimension;
+  String? _coverFilePath;
 
   @override
   void initState() {
@@ -49,6 +69,8 @@ class _VinylWidgetState extends State<VinylWidget>
       _velocity = _targetSpeed;
       _startTicker();
     }
+    _loadShaderResources();
+    _loadVinylAssets();
   }
 
   @override
@@ -57,12 +79,29 @@ class _VinylWidgetState extends State<VinylWidget>
     if (widget.isPlaying && !_ticker.isActive) {
       _startTicker();
     }
+    if (oldWidget.coverFile.path != widget.coverFile.path) {
+      _coverImage = null;
+      _coverCacheDimension = null;
+      _coverFilePath = null;
+      _disposeCoverStream();
+      if (_lastCacheDimension != null) {
+        _resolveCoverImage(_lastCacheDimension!);
+      }
+    }
+    if (oldWidget.style != widget.style) {
+      _loadVinylAssets();
+    }
   }
 
   @override
   void dispose() {
     _ticker.dispose();
     _rotationNotifier.dispose();
+    _vinylEffectFragmentShader?.dispose();
+    _vinylScratchImage?.dispose();
+    _vinylSpinningImage?.dispose();
+    _vinylStaticImage?.dispose();
+    _disposeCoverStream();
     super.dispose();
   }
 
@@ -70,8 +109,10 @@ class _VinylWidgetState extends State<VinylWidget>
     final double dt = (elapsed - _lastElapsed).inMicroseconds / 1000000.0;
     _lastElapsed = elapsed;
     final targetSpeed = widget.easterEggs[0] ? 3.0 : _targetSpeed;
+    final shouldSpin = widget.isPlaying &&
+        (widget.isWindowFocused || widget.keepSpinningWhenUnfocused);
 
-    if (widget.isPlaying) {
+    if (shouldSpin) {
       if (_velocity < targetSpeed) {
         _velocity += _acceleration * dt;
         if (_velocity > targetSpeed) _velocity = targetSpeed;
@@ -104,160 +145,255 @@ class _VinylWidgetState extends State<VinylWidget>
     }
   }
 
+  void _disposeCoverStream() {
+    if (_coverStream != null && _coverListener != null) {
+      _coverStream!.removeListener(_coverListener!);
+    }
+    _coverStream = null;
+    _coverListener = null;
+  }
+
+  void _resolveCoverImage(int cacheDimension) {
+    final String path = widget.coverFile.path;
+    if (_coverCacheDimension == cacheDimension &&
+        _coverFilePath == path &&
+        _coverImage != null) {
+      return;
+    }
+
+    _coverCacheDimension = cacheDimension;
+    _coverFilePath = path;
+    _coverImage = null;
+    _disposeCoverStream();
+
+    final ImageProvider provider = ResizeImage(
+      FileImage(widget.coverFile),
+      width: cacheDimension,
+      height: cacheDimension,
+    );
+    final ImageStream stream = provider.resolve(const ImageConfiguration());
+    _coverStream = stream;
+    _coverListener = ImageStreamListener(
+      (ImageInfo info, bool synchronousCall) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _coverImage = info.image;
+        });
+      },
+      onError: (Object error, StackTrace? stackTrace) {
+        debugPrint('Failed to load vinyl cover image: $error');
+      },
+    );
+    stream.addListener(_coverListener!);
+  }
+
+  Future<void> _loadShaderResources() async {
+    try {
+      final ui.FragmentProgram program = await ui.FragmentProgram.fromAsset(
+        'shaders/vinyl_effect.frag',
+      );
+      final ui.FragmentShader fragmentShader = program.fragmentShader();
+      if (!mounted) {
+        fragmentShader.dispose();
+        return;
+      }
+
+      setState(() {
+        _vinylEffectFragmentShader = fragmentShader;
+        _shaderReady = true;
+      });
+    } catch (error, stack) {
+      debugPrint('Failed to load vinyl shader: $error\n$stack');
+    }
+  }
+
+  Future<ui.Image> _loadAssetImage(String assetPath) async {
+    final ByteData bytes = await rootBundle.load(assetPath);
+    final ui.Codec codec = await ui.instantiateImageCodec(
+      bytes.buffer.asUint8List(),
+    );
+    final ui.FrameInfo frame = await codec.getNextFrame();
+    return frame.image;
+  }
+
+  Future<void> _loadVinylAssets() async {
+    try {
+      final String spinningPath = widget.style == VinylStyle.transparent
+          ? 'assets/vinyl/vinyl-spinning-alt.png'
+          : 'assets/vinyl/vinyl-spinning.png';
+
+      final results = await Future.wait([
+        _loadAssetImage('assets/vinyl/vinyl-effect.png'),
+        _loadAssetImage(spinningPath),
+        _loadAssetImage('assets/vinyl/vinyl-static.png'),
+      ]);
+
+      if (!mounted) {
+        for (final image in results) {
+          image.dispose();
+        }
+        return;
+      }
+
+      setState(() {
+        _vinylScratchImage?.dispose();
+        _vinylSpinningImage?.dispose();
+        _vinylStaticImage?.dispose();
+        _vinylScratchImage = results[0];
+        _vinylSpinningImage = results[1];
+        _vinylStaticImage = results[2];
+      });
+    } catch (error, stack) {
+      debugPrint('Failed to load vinyl assets: $error\n$stack');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    const double coverRatio = 0.88;
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final size = constraints.biggest.shortestSide;
+          final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+          final cacheDimension = _resolveCacheDimension(size, devicePixelRatio);
+          _lastCacheDimension = cacheDimension;
+          _resolveCoverImage(cacheDimension);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = constraints.biggest.shortestSide;
-        final coverSize = size * coverRatio;
-        final devicePixelRatio = MediaQuery.of(context).devicePixelRatio * 1.0;
-        final cacheDimension = _resolveCacheDimension(size, devicePixelRatio);
+          final Color effectTint = widget.easterEggs[1]
+              ? Colors.amber
+              : widget.effectColor;
 
-        final Widget coverImage = ClipOval(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: Image.file(
-              widget.coverFile,
-              key: ValueKey(widget.coverFile.path),
-              cacheWidth: cacheDimension,
-              width: coverSize,
-              height: coverSize,
-              fit: BoxFit.cover,
-              gaplessPlayback: true,
-            ),
-          ),
-        );
+          final bool shaderLayerReady =
+              _shaderReady &&
+              _vinylEffectFragmentShader != null &&
+              _vinylScratchImage != null &&
+              _vinylSpinningImage != null &&
+              _vinylStaticImage != null &&
+              _coverImage != null;
 
-        final Widget vinylBg = Image.asset(
-          widget.style == VinylStyle.transparent
-              ? 'assets/vinyl/vinyl-spinning-alt.png'
-              : 'assets/vinyl/vinyl-spinning.png',
-          cacheWidth: cacheDimension,
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
-          gaplessPlayback: true,
-        );
-
-        final Widget vinylStatic = Image.asset(
-          'assets/vinyl/vinyl-static.png',
-          cacheWidth: cacheDimension,
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
-          gaplessPlayback: true,
-        );
-
-        final Widget vinylEffect = Image.asset(
-          'assets/vinyl/vinyl-effect.png',
-          cacheWidth: cacheDimension,
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
-          color: widget.easterEggs[1] ? Colors.amber : widget.effectColor,
-          gaplessPlayback: true,
-        );
-
-        final gradientColors = [
-          widget.effectColor.withValues(alpha: 0.2),
-          widget.effectColor.withValues(alpha: 0.2),
-          widget.effectColor.withValues(alpha: 1.0),
-          widget.effectColor.withValues(alpha: 0.2),
-          widget.effectColor.withValues(alpha: 0.2),
-        ];
-
-        return RepaintBoundary(
-          child: ClipRect(
-            child: SizedBox(
-              width: size,
-              height: size,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  AnimatedBuilder(
-                    animation: _rotationNotifier,
-                    builder: (context, child) {
-                      final double angle =
-                          _rotationNotifier.value * 2 * math.pi;
-
-                      return Transform.rotate(angle: angle, child: child);
-                    },
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        coverImage,
-                        // Circle Blur in the middle, enabled in settings
-                        widget.style == VinylStyle.transparent
-                            ? Center(
-                                child: Container(
-                                  width: size * 0.33,
-                                  height: size * 0.33,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: BackdropFilter(
-                                    filter: ImageFilter.blur(
-                                      sigmaX: 5,
-                                      sigmaY: 5,
-                                    ),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: Colors.white.withValues(
-                                          alpha: 0.05,
-                                        ),
-                                        border: Border.all(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.1,
-                                          ),
-                                          width: 0.5,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              )
-                            : SizedBox.shrink(),
-                        vinylBg,
-                      ],
+          final Widget vinyl = shaderLayerReady
+              ? SizedBox(
+                  width: size,
+                  height: size,
+                  child: CustomPaint(
+                    painter: _VinylShaderPainter(
+                      rotation: _rotationNotifier,
+                      shader: _vinylEffectFragmentShader!,
+                      coverImage: _coverImage!,
+                      spinningImage: _vinylSpinningImage!,
+                      staticImage: _vinylStaticImage!,
+                      scratchImage: _vinylScratchImage!,
+                      effectColor: effectTint,
+                      baseColor: widget.backgroundColor,
+                      coverRadius: _coverRatio / 1.0,
+                      style: widget.style,
+                      coverScale: 1.00,
                     ),
                   ),
-
-                  vinylStatic,
-
-                  AnimatedBuilder(
-                    animation: _rotationNotifier,
-                    builder: (context, child) {
-                      final double angle =
-                          _rotationNotifier.value * 2 * math.pi;
-                      return ShaderMask(
-                        shaderCallback: (Rect bounds) {
-                          return LinearGradient(
-                            begin: Alignment.topRight,
-                            end: Alignment.bottomLeft,
-                            colors: gradientColors,
-                            stops: const [0.0, 0.4, 0.5, 0.6, 1.0],
-                          ).createShader(bounds);
-                        },
-                        blendMode: BlendMode.dstIn,
-                        child: Transform.rotate(angle: angle, child: child),
-                      );
-                    },
-                    child: vinylEffect,
+                )
+              : Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: widget.backgroundColor,
                   ),
-                ],
+                );
+
+          return Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: RepaintBoundary(
+              child: ClipRect(
+                child: SizedBox(width: size, height: size, child: vinyl),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
   int _resolveCacheDimension(double size, double devicePixelRatio) {
     final int requested = math.max(1, (size * devicePixelRatio).ceil());
     return math.min(_cacheWidth, requested);
+  }
+}
+
+class _VinylShaderPainter extends CustomPainter {
+  _VinylShaderPainter({
+    required this.rotation,
+    required this.shader,
+    required this.coverImage,
+    required this.spinningImage,
+    required this.staticImage,
+    required this.scratchImage,
+    required this.effectColor,
+    required this.baseColor,
+    required this.coverRadius,
+    required this.style,
+    required this.coverScale,
+  }) : super(repaint: rotation);
+
+  final ValueListenable<double> rotation;
+  final ui.FragmentShader shader;
+  final ui.Image coverImage;
+  final ui.Image spinningImage;
+  final ui.Image staticImage;
+  final ui.Image scratchImage;
+  final Color effectColor;
+  final Color baseColor;
+  final double coverRadius;
+  final VinylStyle style;
+  final double coverScale;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) {
+      return;
+    }
+
+    final double angle = -rotation.value * 2 * math.pi;
+    final double effectAlpha = effectColor.a;
+    final double baseAlpha = baseColor.a;
+
+    shader
+      ..setFloat(0, size.width)
+      ..setFloat(1, size.height)
+      ..setFloat(2, angle)
+      ..setFloat(3, effectColor.r * effectAlpha)
+      ..setFloat(4, effectColor.g * effectAlpha)
+      ..setFloat(5, effectColor.b * effectAlpha)
+      ..setFloat(6, effectAlpha)
+      ..setFloat(7, baseColor.r * baseAlpha)
+      ..setFloat(8, baseColor.g * baseAlpha)
+      ..setFloat(9, baseColor.b * baseAlpha)
+      ..setFloat(10, baseAlpha)
+      ..setFloat(11, coverRadius)
+      ..setFloat(12, style == VinylStyle.transparent ? 1.0 : 0.0)
+      ..setFloat(13, coverScale);
+    shader.setImageSampler(0, coverImage);
+    shader.setImageSampler(1, spinningImage);
+    shader.setImageSampler(2, staticImage);
+    shader.setImageSampler(3, scratchImage);
+
+    final paint = Paint()..shader = shader;
+    canvas.drawRect(Offset.zero & size, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _VinylShaderPainter oldDelegate) {
+    return oldDelegate.shader != shader ||
+        oldDelegate.effectColor != effectColor ||
+        oldDelegate.baseColor != baseColor ||
+        oldDelegate.coverRadius != coverRadius ||
+        oldDelegate.style != style ||
+        oldDelegate.coverImage != coverImage ||
+        oldDelegate.spinningImage != spinningImage ||
+        oldDelegate.staticImage != staticImage ||
+        oldDelegate.scratchImage != scratchImage ||
+        oldDelegate.rotation != rotation;
   }
 }
